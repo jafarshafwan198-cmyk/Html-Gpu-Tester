@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tes GPU</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #e9eef3;
+    --surface: #f6f9fb;
+    --ink: #10233a;
+    --muted: #55677b;
+    --line: #c3cfdb;
+    --accent: #2440ff;
+    --accent-ink: #ffffff;
+    --stop: #c2410c;
+    --stop-ink: #ffffff;
+    --disabled-bg: #d5dee7;
+    --disabled-ink: #8797a8;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d1520;
+      --surface: #142131;
+      --ink: #e6eef7;
+      --muted: #93a4b8;
+      --line: #263a50;
+      --accent: #7d8cff;
+      --accent-ink: #0d1520;
+      --stop: #ff9a5c;
+      --stop-ink: #1a0e05;
+      --disabled-bg: #1c2d40;
+      --disabled-ink: #5f7389;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1520;
+    --surface: #142131;
+    --ink: #e6eef7;
+    --muted: #93a4b8;
+    --line: #263a50;
+    --accent: #7d8cff;
+    --accent-ink: #0d1520;
+    --stop: #ff9a5c;
+    --stop-ink: #1a0e05;
+    --disabled-bg: #1c2d40;
+    --disabled-ink: #5f7389;
+  }
+
+  *, *::before, *::after { box-sizing: inherit; }
+  html { height: 100%; scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+  }
+  main {
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 20px 16px 32px;
+  }
+  h1 {
+    margin: 0;
+    font-family: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+    font-weight: 700;
+    font-size: 28px;
+    letter-spacing: 0.01em;
+    line-height: 1.1;
+  }
+  .sub { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+
+  .readout {
+    margin-top: 18px;
+    padding: 18px 18px 14px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+  }
+  .readout-head { display: flex; align-items: baseline; gap: 10px; }
+  .readout-head .lbl { font-weight: 600; color: var(--muted); font-size: 15px; }
+  .live {
+    margin-left: auto;
+    font-size: 13px;
+    color: var(--muted);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .live i {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--disabled-ink);
+    display: inline-block;
+  }
+  body.running .live i { background: var(--accent); }
+  .fps {
+    font-family: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+    font-weight: 800;
+    font-size: clamp(104px, 34vw, 190px);
+    line-height: 0.88;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    margin: 6px 0 4px;
+    color: var(--ink);
+  }
+  body:not(.running) .fps.idle { color: var(--disabled-ink); }
+  #spark { display: block; width: 100%; height: 56px; }
+  .stats {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 8px; margin-top: 10px;
+    border-top: 1px solid var(--line);
+    padding-top: 10px;
+  }
+  .stats div { display: flex; flex-direction: column; }
+  .stats span { font-size: 13px; color: var(--muted); }
+  .stats b { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .controls { margin-top: 22px; }
+  fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+  legend, .count label { font-weight: 600; font-size: 15px; padding: 0; margin-bottom: 8px; }
+  .chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .chip input { position: absolute; opacity: 0; pointer-events: none; }
+  .chip span {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 58px; padding: 6px 2px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface);
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+  }
+  .chip span b { font-size: 15px; font-weight: 700; line-height: 1.2; }
+  .chip span small { font-size: 11px; color: var(--muted); line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .chip input:checked + span {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+  }
+  .chip input:checked + span small { color: var(--accent-ink); opacity: 0.85; }
+  .chip input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 2px; }
+  fieldset:disabled .chip span { cursor: not-allowed; opacity: 0.55; }
+
+  .count { margin-top: 20px; }
+  .count-row { display: flex; align-items: center; gap: 14px; }
+  .count output {
+    min-width: 2.2ch; text-align: center;
+    font-family: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+    font-weight: 800; font-size: 34px; line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  input[type=range] { flex: 1; width: 100%; height: 36px; accent-color: var(--accent); background: transparent; }
+  input[type=range]:disabled { opacity: 0.5; }
+  .ticks { display: flex; justify-content: space-between; padding: 0 52px 0 2px; margin-top: -4px; color: var(--muted); font-size: 12px; }
+
+  .actions { display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; margin-top: 22px; }
+  button {
+    font: inherit; font-weight: 700; font-size: 16px;
+    min-height: 54px; padding: 0 16px;
+    border: 0; border-radius: 14px; cursor: pointer;
+    transition: transform 0.08s, opacity 0.12s;
+  }
+  button:active:not(:disabled) { transform: scale(0.98); }
+  button:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+  #start { background: var(--accent); color: var(--accent-ink); }
+  #stop { background: var(--stop); color: var(--stop-ink); }
+  button:disabled { background: var(--disabled-bg); color: var(--disabled-ink); cursor: not-allowed; }
+
+  .info { margin: 18px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 14px; }
+  .info dt { color: var(--muted); }
+  .info dd { margin: 0; font-weight: 500; overflow-wrap: anywhere; }
+  #status { margin: 14px 0 0; font-size: 14px; color: var(--muted); min-height: 1.5em; }
+  #status.error { color: var(--stop); font-weight: 600; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Tes GPU</h1>
+    <p class="sub">Objek 3D dirender di belakang layar. Yang tampil hanya FPS.</p>
+  </header>
+
+  <section class="readout" aria-label="Hasil FPS">
+    <div class="readout-head">
+      <span class="lbl">FPS</span>
+      <span class="live"><i></i><span id="liveText">Belum berjalan</span></span>
+    </div>
+    <div id="fps" class="fps idle" role="status" aria-live="off">0</div>
+    <canvas id="spark" aria-hidden="true"></canvas>
+    <div class="stats">
+      <div><span>Rata-rata</span><b id="avg">0</b></div>
+      <div><span>Terendah</span><b id="min">0</b></div>
+      <div><span>Tertinggi</span><b id="max">0</b></div>
+    </div>
+  </section>
+
+  <section class="controls">
+    <fieldset id="gfxSet">
+      <legend>Grafik</legend>
+      <div class="chips" id="chips"></div>
+    </fieldset>
+
+    <div class="count">
+      <label for="count">Jumlah objek</label>
+      <div class="count-row">
+        <input type="range" id="count" min="1" max="10" step="1" value="3">
+        <output id="countOut" for="count">3</output>
+      </div>
+      <div class="ticks" aria-hidden="true"><span>1</span><span>5</span><span>10</span></div>
+    </div>
+
+    <div class="actions">
+      <button id="start" type="button">Mulai tes</button>
+      <button id="stop" type="button" disabled>Berhenti tes</button>
+    </div>
+
+    <dl class="info" id="info" hidden>
+      <dt>Resolusi</dt><dd id="iRes">-</dd>
+      <dt>Objek</dt><dd id="iObj">-</dd>
+      <dt>Segitiga</dt><dd id="iTri">-</dd>
+      <dt>GPU</dt><dd id="iGpu">-</dd>
+    </dl>
+    <p id="status" role="status"></p>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ---------- Preset grafik ----------
+  var HIGH_DETAIL = { seg: [512, 64], mat: 'physical', shadowSize: 2048, msaa: true, lights: 4 };
+  function merge(base, extra) {
+    var o = {}, k;
+    for (k in base) o[k] = base[k];
+    for (k in extra) o[k] = extra[k];
+    return o;
+  }
+  var PRESETS = {
+    low:    { label: 'Low',    w: 1280, h: 720,  seg: [64, 8],    mat: 'standard', shadowSize: 0,    msaa: false, lights: 1 },
+    medium: { label: 'Medium', w: 1920, h: 1080, seg: [128, 16],  mat: 'standard', shadowSize: 0,    msaa: false, lights: 2 },
+    high:   { label: 'High',   w: 1920, h: 1080, seg: [256, 32],  mat: 'physical', shadowSize: 1024, msaa: true,  lights: 3 },
+    ultra:  { label: 'Ultra',  w: 2560, h: 1440, seg: [512, 64],  mat: 'physical', shadowSize: 2048, msaa: true,  lights: 4 },
+    '2k':   merge(HIGH_DETAIL, { label: '2K', w: 2560, h: 1440 }),
+    '3k':   merge(HIGH_DETAIL, { label: '3K', w: 3200, h: 1800 }),
+    '4k':   merge(HIGH_DETAIL, { label: '4K', w: 3840, h: 2160 }),
+    '8k':   merge(HIGH_DETAIL, { label: '8K', w: 7680, h: 4320, msaa: false })
+  };
+  var ORDER = ['low', 'medium', 'high', 'ultra', '2k', '3k', '4k', '8k'];
+
+  // ---------- Elemen ----------
+  var $ = function (id) { return document.getElementById(id); };
+  var chipsEl = $('chips'), gfxSet = $('gfxSet');
+  var countEl = $('count'), countOut = $('countOut');
+  var startBtn = $('start'), stopBtn = $('stop');
+  var fpsEl = $('fps'), avgEl = $('avg'), minEl = $('min'), maxEl = $('max');
+  var statusEl = $('status'), liveText = $('liveText');
+  var infoEl = $('info');
+  var spark = $('spark');
+
+  ORDER.forEach(function (key, i) {
+    var p = PRESETS[key];
+    var label = document.createElement('label');
+    label.className = 'chip';
+    label.innerHTML =
+      '<input type="radio" name="gfx" value="' + key + '"' + (key === 'ultra' ? ' checked' : '') + '>' +
+      '<span><b>' + p.label + '</b><small>' + p.w + '\u00d7' + p.h + '</small></span>';
+    chipsEl.appendChild(label);
+  });
+
+  countEl.addEventListener('input', function () { countOut.textContent = countEl.value; });
+
+  // ---------- State ----------
+  var running = false;
+  var renderer, gl, scene, camera, canvas, objects, movingLights, pixel;
+  var lastT = 0, winStart = 0, winFrames = 0;
+  var statFrames = 0, statTime = 0, minFps = Infinity, maxFps = 0, warm = 0;
+  var startedAt = 0;
+  var history = [];
+  var channel = new MessageChannel();
+  channel.port1.onmessage = frame;
+
+  function setStatus(msg, isError) {
+    statusEl.textContent = msg || '';
+    statusEl.className = isError ? 'error' : '';
+  }
+
+  function selectedKey() {
+    var r = document.querySelector('input[name="gfx"]:checked');
+    return r ? r.value : 'ultra';
+  }
+
+  function fmt(n) { return Math.round(n).toString(); }
+  function fmtInt(n) { return n.toLocaleString('id-ID'); }
+
+  // ---------- Sparkline ----------
+  function drawSpark() {
+    var dpr = window.devicePixelRatio || 1;
+    var w = spark.clientWidth, h = spark.clientHeight;
+    if (spark.width !== Math.round(w * dpr)) { spark.width = Math.round(w * dpr); spark.height = Math.round(h * dpr); }
+    var ctx = spark.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    var cs = getComputedStyle(document.documentElement);
+    var accent = cs.getPropertyValue('--accent').trim() || '#2440ff';
+    var line = cs.getPropertyValue('--line').trim() || '#ccc';
+    ctx.strokeStyle = line; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, h - 0.5); ctx.lineTo(w, h - 0.5); ctx.stroke();
+    if (history.length < 2) return;
+    var top = 0;
+    for (var i = 0; i < history.length; i++) if (history[i] > top) top = history[i];
+    top = Math.max(top * 1.15, 10);
+    var step = w / 59;
+    var x0 = w - (history.length - 1) * step;
+    ctx.beginPath();
+    for (var j = 0; j < history.length; j++) {
+      var x = x0 + j * step, y = h - 3 - (history[j] / top) * (h - 8);
+      if (j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = accent; ctx.lineWidth = 2; ctx.lineJoin = 'round';
+    ctx.stroke();
+    ctx.lineTo(w, h); ctx.lineTo(x0, h); ctx.closePath();
+    ctx.globalAlpha = 0.14; ctx.fillStyle = accent; ctx.fill(); ctx.globalAlpha = 1;
+  }
+
+  // ---------- Bangun scene ----------
+  function buildScene(p, n, w, h) {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b1220);
+    var spread = 3.2 * Math.sqrt(n);
+    camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 300);
+    camera.position.set(0, 3.5 + spread * 0.35, 8 + spread * 1.9);
+    camera.lookAt(0, 0, 0);
+
+    scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x203040, 0.55));
+
+    var dir = new THREE.DirectionalLight(0xffffff, 0.9);
+    dir.position.set(8, 14, 10);
+    if (p.shadowSize) {
+      dir.castShadow = true;
+      dir.shadow.mapSize.set(p.shadowSize, p.shadowSize);
+      var c = dir.shadow.camera;
+      c.near = 1; c.far = 60; c.left = -24; c.right = 24; c.top = 24; c.bottom = -24;
+      dir.shadow.bias = -0.0004;
+    }
+    scene.add(dir);
+
+    movingLights = [];
+    var colors = [0xff5a3c, 0x3c8dff, 0x38e0a0, 0xffc83c];
+    for (var l = 0; l < p.lights - 1 && l < colors.length; l++) {
+      var pl = new THREE.PointLight(colors[l], 1.4, 40);
+      scene.add(pl);
+      movingLights.push({ light: pl, phase: l * 1.7, radius: 6 + l * 1.5 });
+    }
+
+    var floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(120, 120),
+      new THREE.MeshStandardMaterial({ color: 0x1a2536, roughness: 0.8, metalness: 0.1 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -3;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    objects = [];
+    for (var i = 0; i < n; i++) {
+      var geo = new THREE.TorusKnotGeometry(1.2, 0.42, p.seg[0], p.seg[1], 2 + (i % 3), 3 + (i % 2));
+      var params = {
+        color: new THREE.Color().setHSL((i * 0.13) % 1, 0.7, 0.55),
+        metalness: 0.65,
+        roughness: 0.25
+      };
+      var mat;
+      if (p.mat === 'physical') {
+        params.clearcoat = 1; params.clearcoatRoughness = 0.08;
+        mat = new THREE.MeshPhysicalMaterial(params);
+      } else {
+        mat = new THREE.MeshStandardMaterial(params);
+      }
+      var mesh = new THREE.Mesh(geo, mat);
+      var ang = i * 2.39996;
+      var rad = 3.2 * Math.sqrt(i);
+      mesh.position.set(Math.cos(ang) * rad, Math.sin(i * 1.3) * 0.8, Math.sin(ang) * rad);
+      mesh.castShadow = !!p.shadowSize;
+      mesh.userData.spin = 0.5 + (i % 5) * 0.12;
+      scene.add(mesh);
+      objects.push(mesh);
+    }
+  }
+
+  function gpuName(g) {
+    try {
+      var ext = g.getExtension('WEBGL_debug_renderer_info');
+      if (ext) return g.getParameter(ext.UNMASKED_RENDERER_WEBGL);
+      return g.getParameter(g.RENDERER);
+    } catch (e) { return 'Tidak diketahui'; }
+  }
+
+  // ---------- Loop ----------
+  function frame() {
+    if (!running) return;
+    var now = performance.now();
+    var dt = Math.min((now - lastT) / 1000, 0.1);
+    lastT = now;
+
+    for (var i = 0; i < objects.length; i++) {
+      var o = objects[i], s = o.userData.spin;
+      o.rotation.x += dt * s;
+      o.rotation.y += dt * s * 1.4;
+    }
+    var t = now / 1000;
+    for (var k = 0; k < movingLights.length; k++) {
+      var m = movingLights[k];
+      m.light.position.set(Math.cos(t * 0.8 + m.phase) * m.radius, 3 + Math.sin(t + m.phase) * 2, Math.sin(t * 0.8 + m.phase) * m.radius);
+    }
+
+    renderer.render(scene, camera);
+    // Baca 1 piksel agar CPU menunggu GPU selesai -> FPS mencerminkan kerja GPU sebenarnya
+    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+    winFrames++;
+
+    var elapsed = now - winStart;
+    if (elapsed >= 500) {
+      var fps = winFrames * 1000 / elapsed;
+      fpsEl.textContent = fmt(fps);
+      fpsEl.classList.remove('idle');
+      history.push(fps);
+      if (history.length > 60) history.shift();
+      warm++;
+      if (warm > 1) { // jendela pertama diabaikan (kompilasi shader)
+        statFrames += winFrames; statTime += elapsed;
+        if (fps < minFps) minFps = fps;
+        if (fps > maxFps) maxFps = fps;
+        avgEl.textContent = fmt(statFrames * 1000 / statTime);
+        minEl.textContent = fmt(minFps);
+        maxEl.textContent = fmt(maxFps);
+      }
+      drawSpark();
+      winStart = now; winFrames = 0;
+    }
+
+    if (gl.isContextLost()) { fail('GPU kehilangan konteks (kemungkinan kehabisan memori). Coba grafik yang lebih rendah.'); return; }
+    channel.port2.postMessage(0);
+  }
+
+  function cleanup() {
+    running = false;
+    try {
+      if (scene) {
+        scene.traverse(function (o) {
+          if (o.geometry) o.geometry.dispose();
+          if (o.material) o.material.dispose();
+        });
+      }
+      if (renderer) { renderer.dispose(); renderer.forceContextLoss(); }
+    } catch (e) {}
+    if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+    renderer = gl = scene = camera = canvas = objects = movingLights = null;
+  }
+
+  function setUI(isRunning) {
+    document.body.classList.toggle('running', isRunning);
+    startBtn.disabled = isRunning;
+    stopBtn.disabled = !isRunning;
+    gfxSet.disabled = isRunning;
+    countEl.disabled = isRunning;
+    liveText.textContent = isRunning ? 'Sedang berjalan' : 'Belum berjalan';
+  }
+
+  function fail(msg) {
+    cleanup();
+    setUI(false);
+    setStatus(msg, true);
+  }
+
+  function start() {
+    if (running) return;
+    if (typeof THREE === 'undefined') { setStatus('Three.js gagal dimuat. Periksa koneksi internet lalu muat ulang halaman.', true); return; }
+
+    var key = selectedKey();
+    var p = PRESETS[key];
+    var n = parseInt(countEl.value, 10);
+    setStatus('');
+
+    canvas = document.createElement('canvas');
+    canvas.setAttribute('aria-hidden', 'true');
+    canvas.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;';
+    document.body.appendChild(canvas);
+
+    try {
+      renderer = new THREE.WebGLRenderer({
+        canvas: canvas,
+        antialias: p.msaa,
+        powerPreference: 'high-performance',
+        preserveDrawingBuffer: false
+      });
+    } catch (e) {
+      fail('Perangkat ini tidak mendukung WebGL, atau GPU sedang tidak bisa dipakai.');
+      return;
+    }
+    gl = renderer.getContext();
+
+    // Batasi ke ukuran maksimum yang didukung GPU
+    var dims = gl.getParameter(gl.MAX_VIEWPORT_DIMS);
+    var limit = Math.min(dims[0], dims[1], gl.getParameter(gl.MAX_RENDERBUFFER_SIZE));
+    var w = p.w, h = p.h, clamped = false;
+    if (w > limit) { h = Math.round(h * limit / w); w = limit; clamped = true; }
+
+    renderer.setPixelRatio(1);
+    renderer.setSize(w, h, false); // false: jangan ubah ukuran tampilan CSS (tetap tak terlihat)
+    renderer.shadowMap.enabled = !!p.shadowSize;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    try {
+      buildScene(p, n, w, h);
+      pixel = new Uint8Array(4);
+      renderer.render(scene, camera); // frame pemanasan
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+    } catch (e) {
+      fail('Gagal menyiapkan tes pada pengaturan ini. Coba grafik yang lebih rendah.');
+      return;
+    }
+    if (gl.isContextLost() || gl.getError() === gl.OUT_OF_MEMORY) {
+      fail('Memori GPU tidak cukup untuk ' + p.label + '. Coba grafik yang lebih rendah.');
+      return;
+    }
+
+    // Reset statistik
+    history = []; warm = 0; statFrames = 0; statTime = 0; minFps = Infinity; maxFps = 0;
+    fpsEl.textContent = '0'; avgEl.textContent = minEl.textContent = maxEl.textContent = '0';
+    drawSpark();
+
+    $('iRes').textContent = w + '\u00d7' + h + (clamped ? ' (dibatasi GPU, target ' + p.w + '\u00d7' + p.h + ')' : '');
+    $('iObj').textContent = n;
+    $('iTri').textContent = fmtInt(renderer.info.render.triangles);
+    $('iGpu').textContent = gpuName(gl);
+    infoEl.hidden = false;
+
+    canvas.addEventListener('webglcontextlost', function (e) {
+      e.preventDefault();
+      if (running) fail('GPU kehilangan konteks (kemungkinan kehabisan memori). Coba grafik yang lebih rendah.');
+    });
+
+    running = true;
+    setUI(true);
+    startedAt = lastT = winStart = performance.now();
+    winFrames = 0;
+    channel.port2.postMessage(0);
+  }
+
+  function stop() {
+    if (!running) return;
+    var secs = (performance.now() - startedAt) / 1000;
+    var avg = statTime ? statFrames * 1000 / statTime : 0;
+    cleanup();
+    setUI(false);
+    fpsEl.classList.add('idle');
+    if (statTime) {
+      setStatus('Tes dihentikan setelah ' + Math.round(secs) + ' detik. Rata-rata ' + fmt(avg) + ' FPS.');
+    } else {
+      setStatus('Tes dihentikan sebelum data terkumpul.');
+    }
+  }
+
+  startBtn.addEventListener('click', start);
+  stopBtn.addEventListener('click', stop);
+  window.addEventListener('pagehide', function () { if (running) stop(); });
+  window.addEventListener('resize', drawSpark);
+  drawSpark();
+})();
+</script>
+</body>
+</html>
